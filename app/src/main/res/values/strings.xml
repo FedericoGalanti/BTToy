@@ -1,0 +1,9 @@
+<resources>
+    <string name="app_name">BTPing</string>
+    <string name="beacon_button_descr">Attivazione Beacon</string>
+    <string name="scanning_button_descr">Attivazione Scansione</string>
+    <string name="status_scanning_on">Scanning dei beacon attivato!</string>
+    <string name="status_scanning_off">Scanning dei beacon disattivato!</string>
+    <string name="status_beacon_on">Beacon attivato!</string>
+    <string name="status_beacon_off">Beacon disattivato!</string>
+</resources>
