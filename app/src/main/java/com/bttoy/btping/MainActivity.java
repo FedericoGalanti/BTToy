@@ -10,7 +10,9 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.PackageManager;
 import android.os.Bundle;
+import android.widget.Button;
 import android.widget.Switch;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
@@ -33,10 +35,13 @@ public class MainActivity extends AppCompatActivity {
     protected static final String btpingUUID = "7e6985df-4aa3-4bda-bb8b-9f11bf7077a0";
     protected static final String SCANNING_ACTION = "SCANNING_SERVICE_UPDATE";
     protected static final String BEACON_ACTION = "BEACON_SERVICE_UPDATE";
+    protected String minorID = "1";
     private BroadcastReceiver receiver = null;
     private BeaconTransmitter mBeaconTransmitter = null;
     private Beacon beacon = null;
     private Switch beaconSw, scanSw;
+    private TextView idTextView;
+    private Button idConfirm;
     private boolean compliant;
 
     @Override
@@ -49,6 +54,8 @@ public class MainActivity extends AppCompatActivity {
 
         beaconSw = findViewById(R.id.beaconSwitch);
         scanSw = findViewById(R.id.scanSwitch);
+        idTextView = findViewById(R.id.beaconIDTextView);
+        idConfirm = findViewById(R.id.confIDButton);
 
         receiver = new BroadcastReceiver() {
             @Override
@@ -79,6 +86,7 @@ public class MainActivity extends AppCompatActivity {
             beaconSw.setOnCheckedChangeListener((buttonView, isChecked) -> {
                 Intent beaconIntent = new Intent(getApplicationContext(), BeaconService.class);
                 if (isChecked) {
+                    beaconIntent.putExtra("beacon_minor", minorID);
                     startService(beaconIntent);
                     Toast.makeText(this, R.string.status_beacon_on, Toast.LENGTH_SHORT).show();
                 } else {
@@ -97,6 +105,10 @@ public class MainActivity extends AppCompatActivity {
                 stopService(scanningIntent);
                 Toast.makeText(this, R.string.status_scanning_off, Toast.LENGTH_SHORT).show();
             }
+        });
+
+        idConfirm.setOnClickListener(v -> {
+            if (idTextView.getText() != null) minorID = idTextView.getText().toString();
         });
     }
 

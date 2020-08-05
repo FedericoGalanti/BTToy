@@ -33,14 +33,6 @@ public class BeaconService extends Service {
     public void onCreate() {
         super.onCreate();
         mBeaconTransmitter = new BeaconTransmitter(this, new BeaconParser().setBeaconLayout(BeaconParser.ALTBEACON_LAYOUT));
-        beacon = new Beacon.Builder()
-                .setId1(btpingUUID)
-                .setId2("1")
-                .setId3("1")
-                .setManufacturer(0x0000)
-                .setTxPower(-59)
-                .setDataFields(Arrays.asList(0l))
-                .build();
     }
 
     @Override
@@ -52,6 +44,15 @@ public class BeaconService extends Service {
             posso controllare il Service per farlo stoppare o per prevenirne la creazione.
          */
         super.onStartCommand(intent, flags, startId);
+        String minor = intent.getStringExtra("beacon_minor");
+        beacon = new Beacon.Builder()
+                .setId1(btpingUUID)
+                .setId2("1")
+                .setId3(minor)
+                .setManufacturer(0x0000)
+                .setTxPower(-59)
+                .setDataFields(Arrays.asList(0l))
+                .build();
         mBeaconTransmitter.startAdvertising(beacon, new AdvertiseCallback() {
             @Override
             public void onStartFailure(int errorCode) {
