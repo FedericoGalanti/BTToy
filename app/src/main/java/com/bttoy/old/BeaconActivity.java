@@ -8,9 +8,12 @@ import android.bluetooth.le.AdvertiseCallback;
 import android.bluetooth.le.AdvertiseSettings;
 import android.content.Context;
 import android.content.DialogInterface;
+import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.os.Bundle;
 import android.util.Log;
+
+import androidx.localbroadcastmanager.content.LocalBroadcastManager;
 
 import com.bttoy.btping.R;
 
@@ -18,7 +21,6 @@ import org.altbeacon.beacon.Beacon;
 import org.altbeacon.beacon.BeaconParser;
 import org.altbeacon.beacon.BeaconTransmitter;
 
-import java.lang.annotation.Target;
 import java.util.Arrays;
 
 public class BeaconActivity extends Activity {
@@ -69,6 +71,13 @@ public class BeaconActivity extends Activity {
 
     private void stopAdvertisingPings(){
         mBeaconTransmitter.stopAdvertising();
+    }
+
+    private void tellMain(String msg) {
+        Intent intent = new Intent("SERVICE_UPDATE");
+        // You can also include some extra data.
+        intent.putExtra("update", msg);
+        LocalBroadcastManager.getInstance(getApplicationContext()).sendBroadcast(intent);
     }
 
     //Controllo prerequisiti per eseguire il beaconing

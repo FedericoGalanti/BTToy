@@ -5,9 +5,9 @@ import android.bluetooth.le.AdvertiseCallback;
 import android.bluetooth.le.AdvertiseSettings;
 import android.content.Intent;
 import android.os.IBinder;
-import android.util.Log;
 
 import androidx.annotation.Nullable;
+import androidx.localbroadcastmanager.content.LocalBroadcastManager;
 
 import org.altbeacon.beacon.Beacon;
 import org.altbeacon.beacon.BeaconParser;
@@ -52,36 +52,33 @@ public class BeaconService extends Service {
             posso controllare il Service per farlo stoppare o per prevenirne la creazione.
          */
         super.onStartCommand(intent, flags, startId);
-        if (!startAdverisingPings()){
-            Log.e(TAG, "Service interrotto: advertising fallito!");
-            stopSelf();
-        }
-        return START_NOT_STICKY;
-    }
-
-    @Override
-    public void onDestroy() {
-        super.onDestroy();
-        stopAdvertisingPings();
-    }
-
-    //Controllo prerequisiti per eseguire il beaconing
-    private boolean startAdverisingPings(){
         mBeaconTransmitter.startAdvertising(beacon, new AdvertiseCallback() {
             @Override
             public void onStartFailure(int errorCode) {
-                //Log.e(TAG, "Avvio advertisement fallito, codice: "+ errorCode);
+                tellMain("Debug: advertising non avviato! " + errorCode);
+                stopSelf();
             }
 
             @Override
             public void onStartSuccess(AdvertiseSettings settingsInEffect) {
-                //Log.i(TAG, "Advertisement avviato!");
+                tellMain("Debug: advertising avviato! " + settingsInEffect.toString());
             }
         });
-        return mBeaconTransmitter.isStarted();
+        return START_STICKY;
     }
 
-    private void stopAdvertisingPings(){
+    @Override
+    public void onDestroy() {
         mBeaconTransmitter.stopAdvertising();
+        super.onDestroy();
     }
+
+    private void tellMain(String msg) {
+        Intent intent = new Intent("BEACON_SERVICE_UPDATE");
+        // You can also include some extra data.
+        intent.putExtra("BEACON_UPDATE", msg);
+        LocalBroadcastManager.getInstance(getApplicationContext()).sendBroadcast(intent);
+    }
+
+
 }

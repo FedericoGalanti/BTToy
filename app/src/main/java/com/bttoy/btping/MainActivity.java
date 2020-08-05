@@ -1,57 +1,41 @@
 package com.bttoy.btping;
 
-import androidx.appcompat.app.AlertDialog;
-import androidx.appcompat.app.AppCompatActivity;
-
 import android.Manifest;
 import android.annotation.TargetApi;
 import android.bluetooth.BluetoothManager;
+import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.pm.PackageManager;
 import android.os.Bundle;
-import android.os.RemoteException;
-import android.util.Log;
-import android.view.View;
-import android.widget.Button;
-import android.widget.CompoundButton;
 import android.widget.Switch;
 import android.widget.Toast;
 
-import org.altbeacon.beacon.Beacon;
-import org.altbeacon.beacon.BeaconConsumer;
-import org.altbeacon.beacon.BeaconManager;
-import org.altbeacon.beacon.BeaconParser;
-import org.altbeacon.beacon.Identifier;
-import org.altbeacon.beacon.MonitorNotifier;
-import org.altbeacon.beacon.RangeNotifier;
-import org.altbeacon.beacon.Region;
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.localbroadcastmanager.content.LocalBroadcastManager;
 
-import java.util.Collection;
+import org.altbeacon.beacon.Beacon;
+import org.altbeacon.beacon.BeaconTransmitter;
 
 /*
     Okay, questo è il consumatore. Binding può essere effettuato anche per un Service.
     Quindi, per fare un app che va da sé, posso mettere sia il consumer che il beacon in background
     Ma voglio tenere i controlli in foreground.
+
+    TODO: prepare broadcast receiver and set up both services for communication.
+    TODO: (Extra) think of another way to set up both: probably two service is not working
  */
 
-public class MainActivity extends AppCompatActivity implements BeaconConsumer {
+public class MainActivity extends AppCompatActivity {
     protected static final String TAG = "MainActivity";
     protected static final String btpingUUID = "7e6985df-4aa3-4bda-bb8b-9f11bf7077a0";
-    /*
-        Beacon Manager serve per creare o gestire i Beacons che si vogliono creare.
-        Va prima dichiarato e poi istanziato nell'onCreate().
-     */
-    private BeaconManager beaconManager = null;
-    /*
-        La Region è il range del dispositivo per cui i Beacon sono visti.
-        Va settata per specificare qual'è il funzionamento dello scanner:
-        - Chi è lo scanner
-        - Cosa stiamo cercando (UUID, Major e minor) visto che usiamo AltBeacon
-     */
-    private Region beaconRegion = null;
-
+    protected static final String SCANNING_ACTION = "SCANNING_SERVICE_UPDATE";
+    protected static final String BEACON_ACTION = "BEACON_SERVICE_UPDATE";
+    private BroadcastReceiver receiver = null;
+    private BeaconTransmitter mBeaconTransmitter = null;
+    private Beacon beacon = null;
     private Switch beaconSw, scanSw;
     private boolean compliant;
 
@@ -60,139 +44,71 @@ public class MainActivity extends AppCompatActivity implements BeaconConsumer {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
         compliant = checkPrerequisites();
+        //Richiediamo il permesso per la Localizzazione
+        requestPermissions(new String[]{Manifest.permission.ACCESS_COARSE_LOCATION}, 1234);
 
         beaconSw = findViewById(R.id.beaconSwitch);
         scanSw = findViewById(R.id.scanSwitch);
 
-        if (compliant){
+        receiver = new BroadcastReceiver() {
+            @Override
+            public void onReceive(Context context, Intent intent) {
+                // Receiver per catturare i dispositivi visti
+                String action = intent.getAction();
+                assert action != null;
+                switch (action) {
+                    case SCANNING_ACTION: {
+                        Toast.makeText(getApplicationContext(), intent.getStringExtra("SCANNING_UPDATE"), Toast.LENGTH_SHORT).show();
+                        break;
+                    }
+                    case BEACON_ACTION: {
+                        Toast.makeText(getApplicationContext(), intent.getStringExtra("BEACON_UPDATE"), Toast.LENGTH_SHORT).show();
+                        break;
+                    }
+                    default: {
+                        break;
+                    }
+                }
+            }
+        };
+        IntentFilter filter = new IntentFilter(SCANNING_ACTION);
+        filter.addAction(BEACON_ACTION);
+        LocalBroadcastManager.getInstance(this).registerReceiver(receiver, filter);
+
+        if (compliant) {
             beaconSw.setOnCheckedChangeListener((buttonView, isChecked) -> {
                 Intent beaconIntent = new Intent(getApplicationContext(), BeaconService.class);
-                if (isChecked){
+                if (isChecked) {
                     startService(beaconIntent);
-                    Toast.makeText(this, R.string.status_beacon_on, Toast.LENGTH_SHORT);
+                    Toast.makeText(this, R.string.status_beacon_on, Toast.LENGTH_SHORT).show();
                 } else {
                     stopService(beaconIntent);
-                    Toast.makeText(this, R.string.status_beacon_on, Toast.LENGTH_SHORT);
+                    Toast.makeText(this, R.string.status_beacon_off, Toast.LENGTH_SHORT).show();
                 }
             });
         } else beaconSw.setEnabled(false);
 
         scanSw.setOnCheckedChangeListener((buttonView, isChecked) -> {
-            if (isChecked){
-                startBeaconingMonitor();
-                Toast.makeText(this, R.string.status_scanning_on, Toast.LENGTH_SHORT);
+            Intent scanningIntent = new Intent(getApplicationContext(), ScanningService.class);
+            if (isChecked) {
+                startService(scanningIntent);
+                Toast.makeText(this, R.string.status_scanning_on, Toast.LENGTH_SHORT).show();
             } else {
-                stopBeaconingMonitor();
-                Toast.makeText(this, R.string.status_scanning_off, Toast.LENGTH_SHORT);
+                stopService(scanningIntent);
+                Toast.makeText(this, R.string.status_scanning_off, Toast.LENGTH_SHORT).show();
             }
         });
-
-        //Richiediamo il permesso per la Localizzazione
-        requestPermissions(new String[] {Manifest.permission.ACCESS_COARSE_LOCATION}, 1234);
-        //Istanzio il Beacon Manager
-        beaconManager = BeaconManager.getInstanceForApplication(this);
-        /*
-            Il Beacon Manager, per riconoscere i Beacons (AltBeacon, quindi tutti i beacon),
-            sfrutta dei parser per fare in modo di "capire" la struttura di qualsiasi protocollo usato,
-            che sia "iBeacon", "Eddystone" (tutti e quattro i frames) o altri protocolli.
-
-            In particolare, i <protocol>_LAYOUTS specificano come dovrebbero essere i pacchetti inviati
-            da ogni protocollo, in modo da poterli catturare e comprendere. Nello specifico:
-
-            ALTBEACON   "m:2-3=beac,i:4-19,i:20-21,i:22-23,p:24-24,d:25-25"
-
-            EDDYSTONE  TLM  "x,s:0-1=feaa,m:2-2=20,d:3-3,d:4-5,d:6-7,d:8-11,d:12-15"
-
-            EDDYSTONE  UID  "s:0-1=feaa,m:2-2=00,p:3-3:-41,i:4-13,i:14-19"
-
-            EDDYSTONE  URL  "s:0-1=feaa,m:2-2=10,p:3-3:-41,i:4-20v"
-
-            IBEACON  "m:2-3=0215,i:4-19,i:20-21,i:22-23,p:24-24"
-
-            Dove:
-            - Termine 1: ID del Manufacturer
-            - Termine "i" (Altbeacon e IBeacon): UUID, Major e Minor
-            - Termine "p": potenza del segnale (RSSI, legato al TX)
-            - Termine "d": data payload
-            Per ora lavoriamo solo con AltBeacon.
-         */
-        beaconManager.getBeaconParsers().add(new BeaconParser().setBeaconLayout(BeaconParser.ALTBEACON_LAYOUT));
-        // Effettuiamo il binding del manager a quest'attività
-        beaconManager.bind(this);
-
-    }
-
-    @Override
-    public void onBeaconServiceConnect() {
-        //Log.d(TAG, "onBeaconServiceConnect called");
-        beaconManager.removeAllMonitorNotifiers();
-        beaconManager.addMonitorNotifier(new MonitorNotifier() {
-            @Override
-            public void didEnterRegion(Region region) {
-                if(!entryMessageRaised) {
-                    showAlert("Beacon detected!" , "Beacon: " + region.getId1() + " " + region.getId2() + " " + region.getId3());
-                }
-                entryMessageRaised = true;
-            }
-
-            @Override
-            public void didExitRegion(Region region) {
-                if(!exitMessageRaised) {
-                    showAlert("Beacon gone!" , "Beacon: " + region.getId1() + " " + region.getId2() + " " + region.getId3());
-                }
-                entryMessageRaised = true;
-            }
-
-            @Override
-            public void didDetermineStateForRegion(int i, Region region) {
-                /* Not implemented */
-            }
-        });
-    }
-
-    /*
-        Alert per far vedere il messaggio corrispondente all'entrata e all'uscita del Beacon
-     */
-    private void showAlert(final String title, final String msg) {
-        runOnUiThread(() -> {
-            AlertDialog alertDialog = new AlertDialog.Builder(MainActivity.this).create();
-            alertDialog.setTitle(title);
-            alertDialog.setMessage(msg);
-            alertDialog.setButton(AlertDialog.BUTTON_NEUTRAL, "OK",
-                    (dialog, which) -> {
-                        dialog.dismiss();
-                    });
-        });
-    }
-
-    private boolean entryMessageRaised = false;
-    private boolean exitMessageRaised = false;
-
-    private void startBeaconingMonitor(){
-        //Log.d(TAG, "startBeaconingMonitor called");
-        try{
-            //Mi creo la region con cui voglio effettuare il monitoring
-            beaconRegion = new Region("BTPing Region", Identifier.parse(btpingUUID),
-                    Identifier.parse("1"), Identifier.parse("1"));
-            beaconManager.startMonitoringBeaconsInRegion(beaconRegion);
-        } catch (RemoteException e){
-            e.printStackTrace();
-        }
-    }
-
-    private void stopBeaconingMonitor(){
-        //Log.d(TAG, "startBeaconingMonitor called");
-        try{
-            beaconManager.stopMonitoringBeaconsInRegion(beaconRegion);
-        } catch (RemoteException e){
-            e.printStackTrace();
-        }
     }
 
     @Override
     protected void onDestroy(){
+        // Stoppo il Service, de-registro il receiver e chiudo tutto
+        Intent scanningIntent = new Intent(getApplicationContext(), ScanningService.class);
+        stopService(scanningIntent);
+        Intent beaconIntent = new Intent(getApplicationContext(), BeaconService.class);
+        stopService(beaconIntent);
+        LocalBroadcastManager.getInstance(this).unregisterReceiver(receiver);
         super.onDestroy();
-        beaconManager.unbind(this);
     }
 
     @TargetApi(21)
@@ -206,7 +122,7 @@ public class MainActivity extends AppCompatActivity implements BeaconConsumer {
 
                 @Override
                 public void onDismiss(DialogInterface dialog) {
-                    finish();
+
                 }
 
             });
@@ -222,7 +138,7 @@ public class MainActivity extends AppCompatActivity implements BeaconConsumer {
 
                 @Override
                 public void onDismiss(DialogInterface dialog) {
-                    finish();
+
                 }
 
             });
@@ -238,13 +154,12 @@ public class MainActivity extends AppCompatActivity implements BeaconConsumer {
 
                 @Override
                 public void onDismiss(DialogInterface dialog) {
-                    finish();
+
                 }
 
             });
             builder.show();
             return false;
-
         }
 
         try {
@@ -269,4 +184,6 @@ public class MainActivity extends AppCompatActivity implements BeaconConsumer {
         }
         return true;
     }
+
+
 }
