@@ -22,12 +22,9 @@ import org.altbeacon.beacon.Beacon;
 import org.altbeacon.beacon.BeaconTransmitter;
 
 /*
-    Okay, questo è il consumatore. Binding può essere effettuato anche per un Service.
-    Quindi, per fare un app che va da sé, posso mettere sia il consumer che il beacon in background
-    Ma voglio tenere i controlli in foreground.
+    TODO: add Ranging to scanning, so you can retrieve Beacons.
+    TODO: fix the goddamn notification system for the service
 
-    TODO: prepare broadcast receiver and set up both services for communication.
-    TODO: (Extra) think of another way to set up both: probably two service is not working
  */
 
 public class MainActivity extends AppCompatActivity {

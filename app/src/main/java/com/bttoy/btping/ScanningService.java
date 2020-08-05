@@ -4,10 +4,10 @@ import android.app.Notification;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
+import android.content.Context;
 import android.content.Intent;
 import android.os.IBinder;
 import android.os.RemoteException;
-import android.widget.Toast;
 
 import androidx.annotation.Nullable;
 import androidx.localbroadcastmanager.content.LocalBroadcastManager;
@@ -48,7 +48,7 @@ public class ScanningService extends Service implements BeaconConsumer {
     @Override
     public void onCreate() {
         super.onCreate();
-
+        mNotification = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
         //Istanzio il Beacon Manager
         beaconManager = BeaconManager.getInstanceForApplication(getApplicationContext());
         /*
@@ -77,13 +77,11 @@ public class ScanningService extends Service implements BeaconConsumer {
             Per ora lavoriamo solo con AltBeacon.
          */
         beaconManager.getBeaconParsers().add(new BeaconParser().setBeaconLayout(BeaconParser.ALTBEACON_LAYOUT));
-        beaconManager.setBackgroundScanPeriod(10000L);
         // Effettuiamo il binding del manager a quest'attività
         beaconManager.bind(this);
         //Mi creo la region con cui voglio effettuare il monitoring
         beaconRegion = new Region("BTPing Region", Identifier.parse(btpingUUID),
-                null, null);
-        Toast.makeText(getApplicationContext(), "Scanning Service activated!", Toast.LENGTH_SHORT).show();
+                Identifier.parse("1"), null);
     }
 
     @Override
@@ -94,7 +92,6 @@ public class ScanningService extends Service implements BeaconConsumer {
             fatti dall'attività, quindi, se il BT dovesse mancare o il dispositivo non fosse abilitato,
             posso controllare il Service per farlo stoppare o per prevenirne la creazione.
          */
-        super.onStartCommand(intent, flags, startId);
         startBeaconingMonitor();
         return START_STICKY;
     }
@@ -103,7 +100,6 @@ public class ScanningService extends Service implements BeaconConsumer {
     public void onDestroy() {
         stopBeaconingMonitor();
         beaconManager.unbind(this);
-        beaconManager = null;
         super.onDestroy();
     }
 
@@ -141,9 +137,7 @@ public class ScanningService extends Service implements BeaconConsumer {
         //Log.d(TAG, "startBeaconingMonitor called");
         try {
             //Mi creo la region con cui voglio effettuare il monitoring
-            beaconRegion = new Region("BTPing Region", Identifier.parse(btpingUUID),
-                    null, null);
-            beaconManager.setBackgroundScanPeriod(10000L);
+            beaconManager.setBackgroundScanPeriod(2000L);
             beaconManager.startMonitoringBeaconsInRegion(beaconRegion);
         } catch (RemoteException e) {
             tellMain("Debug: Remote exception: " + e.toString());
@@ -171,7 +165,6 @@ public class ScanningService extends Service implements BeaconConsumer {
     }
 
     private void showNotification(final String msg) {
-
         Intent intent = new Intent(getApplicationContext(), MainActivity.class);
         PendingIntent pi = PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT);
         Notification notification = new Notification.Builder(this, CHANNEL_ID)
