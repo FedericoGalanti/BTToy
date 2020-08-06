@@ -11,6 +11,7 @@ import android.content.IntentFilter;
 import android.content.pm.PackageManager;
 import android.os.Bundle;
 import android.widget.Button;
+import android.widget.ListView;
 import android.widget.Switch;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -21,10 +22,13 @@ import androidx.localbroadcastmanager.content.LocalBroadcastManager;
 import org.altbeacon.beacon.Beacon;
 import org.altbeacon.beacon.BeaconTransmitter;
 
-/*
-    TODO: add Ranging to scanning, so you can retrieve Beacons.
-    TODO: fix the goddamn notification system for the service
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Objects;
 
+/*
+    TODO: works, but on my phone is okay. Don't get it.
+    TODO: fix the goddamn notification system for the service
  */
 
 public class MainActivity extends AppCompatActivity {
@@ -35,24 +39,26 @@ public class MainActivity extends AppCompatActivity {
     protected String minorID = "1";
     private BroadcastReceiver receiver = null;
     private BeaconTransmitter mBeaconTransmitter = null;
+    private ArrayList<Beacon> sauce = new ArrayList<>();
     private Beacon beacon = null;
-    private Switch beaconSw, scanSw;
     private TextView idTextView;
-    private Button idConfirm;
-    private boolean compliant;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-        compliant = checkPrerequisites();
+        boolean compliant = checkPrerequisites();
         //Richiediamo il permesso per la Localizzazione
         requestPermissions(new String[]{Manifest.permission.ACCESS_COARSE_LOCATION}, 1234);
 
-        beaconSw = findViewById(R.id.beaconSwitch);
-        scanSw = findViewById(R.id.scanSwitch);
+        Switch beaconSw = findViewById(R.id.beaconSwitch);
+        Switch scanSw = findViewById(R.id.scanSwitch);
         idTextView = findViewById(R.id.beaconIDTextView);
-        idConfirm = findViewById(R.id.confIDButton);
+        Button idConfirm = findViewById(R.id.confIDButton);
+        ListView listView = findViewById(R.id.beaconList);
+        sauce.clear();
+        ListCustomAdapter listCustomAdapter = new ListCustomAdapter(this, sauce);
+        listView.setAdapter(listCustomAdapter);
 
         receiver = new BroadcastReceiver() {
             @Override
@@ -62,7 +68,11 @@ public class MainActivity extends AppCompatActivity {
                 assert action != null;
                 switch (action) {
                     case SCANNING_ACTION: {
-                        Toast.makeText(getApplicationContext(), intent.getStringExtra("SCANNING_UPDATE"), Toast.LENGTH_SHORT).show();
+                        String[] message = Objects.requireNonNull(intent.getStringExtra("SCANNING_UPDATE")).split(":");
+                        Toast.makeText(getApplicationContext(), Arrays.toString(message), Toast.LENGTH_SHORT).show();
+                        if (message[0].equals("Found")) {
+                            updateList((Beacon) intent.getSerializableExtra("BEACON_FOUND"));
+                        }
                         break;
                     }
                     case BEACON_ACTION: {
@@ -118,6 +128,31 @@ public class MainActivity extends AppCompatActivity {
         stopService(beaconIntent);
         LocalBroadcastManager.getInstance(this).unregisterReceiver(receiver);
         super.onDestroy();
+    }
+
+    public void updateList(Beacon newItem) {
+        runOnUiThread(() -> {
+            /*
+            if (message[0].equals("In") || message[0].equals("Out")) {
+
+                switch (message[0]) {
+                    case "In": {
+                        if (!sauce.contains(newItem)) {
+                            sauce.add(newItem);
+                            listCustomAdapter.notifyDataSetChanged();
+                        }
+                        break;
+                    }
+                    case "Out": {
+                        sauce.remove(newItem);
+                        listCustomAdapter.notifyDataSetChanged();
+                        break;
+                    }
+                }
+            }
+             */
+            if (!sauce.contains(newItem)) sauce.add(newItem);
+        });
     }
 
     @TargetApi(21)

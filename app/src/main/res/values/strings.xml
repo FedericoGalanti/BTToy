@@ -10,4 +10,7 @@
     <string name="channel_description">Notification channel for scanner</string>
     <string name="id_beacon">ID Beacon</string>
     <string name="conferma_id">Conferma ID</string>
+    <string name="item_title">UID</string>
+    <string name="item_description_1">Major</string>
+    <string name="item_description_2">Minor</string>
 </resources>

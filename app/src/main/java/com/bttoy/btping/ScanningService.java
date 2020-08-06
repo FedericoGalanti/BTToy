@@ -12,12 +12,16 @@ import android.os.RemoteException;
 import androidx.annotation.Nullable;
 import androidx.localbroadcastmanager.content.LocalBroadcastManager;
 
+import org.altbeacon.beacon.Beacon;
 import org.altbeacon.beacon.BeaconConsumer;
 import org.altbeacon.beacon.BeaconManager;
 import org.altbeacon.beacon.BeaconParser;
 import org.altbeacon.beacon.Identifier;
-import org.altbeacon.beacon.MonitorNotifier;
 import org.altbeacon.beacon.Region;
+
+import java.io.Serializable;
+import java.util.ArrayList;
+
 
 public class ScanningService extends Service implements BeaconConsumer {
     protected static final String TAG = "ScanningService";
@@ -36,6 +40,7 @@ public class ScanningService extends Service implements BeaconConsumer {
         - Cosa stiamo cercando (UUID, Major e minor) visto che usiamo AltBeacon
      */
     private Region beaconRegion = null;
+    private ArrayList<Beacon> beaconSeen = new ArrayList<>();
     private boolean entryMessageRaised, exitMessageRaised = false;
 
 
@@ -107,12 +112,13 @@ public class ScanningService extends Service implements BeaconConsumer {
     public void onBeaconServiceConnect() {
         //Log.d(TAG, "onBeaconServiceConnect called");
         beaconManager.removeAllMonitorNotifiers();
+        /*
         beaconManager.addMonitorNotifier(new MonitorNotifier() {
-            @Override
+        @Override
             public void didEnterRegion(Region region) {
                 if (!entryMessageRaised) {
                     //showAlert("Beacon detected!" , "Beacon: " + region.getId1() + " " + region.getId2() + " " + region.getId3());
-                    tellMain("Enters: " + region.getId1() + " " + region.getId2() + " " + region.getId3());
+                    tellMain("Enters: " + region.getId1() + " " + region.getId2() + " " + region.getId3(), null);
                 }
                 entryMessageRaised = true;
             }
@@ -121,14 +127,22 @@ public class ScanningService extends Service implements BeaconConsumer {
             public void didExitRegion(Region region) {
                 if (!exitMessageRaised) {
                     //showAlert("Beacon gone!" , "Beacon: " + region.getId1() + " " + region.getId2() + " " + region.getId3());
-                    tellMain("Leaves: " + region.getId1() + " " + region.getId2() + " " + region.getId3());
+                    tellMain("Leaves: " + region.getId1() + " " + region.getId2() + " " + region.getId3(), null);
                 }
                 exitMessageRaised = true;
             }
 
             @Override
             public void didDetermineStateForRegion(int i, Region region) {
-                /* Not implemented */
+                // Not Implemented
+                }
+            });
+         */
+
+        beaconManager.addRangeNotifier((collection, region) -> {
+            if (collection.iterator().hasNext()) {
+                Beacon beacon = collection.iterator().next();
+                tellMain("Found: " + beacon.getId1() + " " + beacon.getId2() + " " + beacon.getId3(), beacon);
             }
         });
     }
@@ -138,9 +152,10 @@ public class ScanningService extends Service implements BeaconConsumer {
         try {
             //Mi creo la region con cui voglio effettuare il monitoring
             beaconManager.setBackgroundScanPeriod(2000L);
-            beaconManager.startMonitoringBeaconsInRegion(beaconRegion);
+            //beaconManager.startMonitoringBeaconsInRegion(beaconRegion);
+            beaconManager.startRangingBeaconsInRegion(beaconRegion);
         } catch (RemoteException e) {
-            tellMain("Debug: Remote exception: " + e.toString());
+            tellMain("Debug: Remote exception: " + e.toString(), null);
             e.printStackTrace();
         }
     }
@@ -148,18 +163,22 @@ public class ScanningService extends Service implements BeaconConsumer {
     private void stopBeaconingMonitor() {
         //Log.d(TAG, "startBeaconingMonitor called");
         try {
+            /*
             beaconManager.stopMonitoringBeaconsInRegion(beaconRegion);
             entryMessageRaised = false;
             exitMessageRaised = false;
+             */
+            beaconManager.stopRangingBeaconsInRegion(beaconRegion);
         } catch (RemoteException e) {
             e.printStackTrace();
         }
     }
 
-    private void tellMain(String msg) {
+    private void tellMain(String msg, Beacon beacon) {
         Intent intent = new Intent("SCANNING_SERVICE_UPDATE");
         // You can also include some extra data.
         intent.putExtra("SCANNING_UPDATE", msg);
+        if (beacon != null) intent.putExtra("BEACON_FOUND", (Serializable) beacon);
         LocalBroadcastManager.getInstance(getApplicationContext()).sendBroadcast(intent);
         showNotification(msg);
     }
