@@ -5,6 +5,7 @@ import android.bluetooth.le.AdvertiseCallback;
 import android.bluetooth.le.AdvertiseSettings;
 import android.content.Intent;
 import android.os.IBinder;
+import android.widget.Toast;
 
 import androidx.annotation.Nullable;
 import androidx.localbroadcastmanager.content.LocalBroadcastManager;
@@ -16,7 +17,6 @@ import org.altbeacon.beacon.BeaconTransmitter;
 import java.util.Arrays;
 
 public class BeaconService extends Service {
-
     private static final String TAG = "BeaconActivity";
     private BeaconTransmitter mBeaconTransmitter = null;
     private Beacon beacon = null;
@@ -31,8 +31,8 @@ public class BeaconService extends Service {
 
     @Override
     public void onCreate() {
+        mBeaconTransmitter = new BeaconTransmitter(getApplicationContext(), new BeaconParser().setBeaconLayout(BeaconParser.ALTBEACON_LAYOUT));
         super.onCreate();
-        mBeaconTransmitter = new BeaconTransmitter(this, new BeaconParser().setBeaconLayout(BeaconParser.ALTBEACON_LAYOUT));
     }
 
     @Override
@@ -45,6 +45,7 @@ public class BeaconService extends Service {
          */
         super.onStartCommand(intent, flags, startId);
         String minor = intent.getStringExtra("beacon_minor");
+        assert minor != null;
         beacon = new Beacon.Builder()
                 .setId1(btpingUUID)
                 .setId2("1")
@@ -53,6 +54,7 @@ public class BeaconService extends Service {
                 .setTxPower(-59)
                 .setDataFields(Arrays.asList(0l))
                 .build();
+        Toast.makeText(getApplicationContext(), "Beacon: " + beacon.getId2() + " " + beacon.getId3(), Toast.LENGTH_SHORT).show();
         mBeaconTransmitter.startAdvertising(beacon, new AdvertiseCallback() {
             @Override
             public void onStartFailure(int errorCode) {
@@ -62,7 +64,7 @@ public class BeaconService extends Service {
 
             @Override
             public void onStartSuccess(AdvertiseSettings settingsInEffect) {
-                tellMain("Debug: advertising avviato! " + settingsInEffect.toString());
+                tellMain("Debug: advertising avviato! " + beacon.getId2() + " " + beacon.getId3());
             }
         });
         return START_STICKY;
@@ -71,6 +73,7 @@ public class BeaconService extends Service {
     @Override
     public void onDestroy() {
         mBeaconTransmitter.stopAdvertising();
+        mBeaconTransmitter = null;
         super.onDestroy();
     }
 

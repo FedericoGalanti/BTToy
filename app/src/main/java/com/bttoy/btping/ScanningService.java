@@ -111,7 +111,7 @@ public class ScanningService extends Service implements BeaconConsumer {
     @Override
     public void onBeaconServiceConnect() {
         //Log.d(TAG, "onBeaconServiceConnect called");
-        beaconManager.removeAllMonitorNotifiers();
+        beaconManager.removeAllRangeNotifiers();
         /*
         beaconManager.addMonitorNotifier(new MonitorNotifier() {
         @Override
@@ -151,9 +151,10 @@ public class ScanningService extends Service implements BeaconConsumer {
         //Log.d(TAG, "startBeaconingMonitor called");
         try {
             //Mi creo la region con cui voglio effettuare il monitoring
-            beaconManager.setBackgroundScanPeriod(2000L);
+            beaconManager.setBackgroundScanPeriod(10000L);
             //beaconManager.startMonitoringBeaconsInRegion(beaconRegion);
             beaconManager.startRangingBeaconsInRegion(beaconRegion);
+            tellMain("Debug: range started!", null);
         } catch (RemoteException e) {
             tellMain("Debug: Remote exception: " + e.toString(), null);
             e.printStackTrace();
@@ -180,16 +181,16 @@ public class ScanningService extends Service implements BeaconConsumer {
         intent.putExtra("SCANNING_UPDATE", msg);
         if (beacon != null) intent.putExtra("BEACON_FOUND", (Serializable) beacon);
         LocalBroadcastManager.getInstance(getApplicationContext()).sendBroadcast(intent);
-        showNotification(msg);
+        //showNotification(msg);
     }
 
     private void showNotification(final String msg) {
         Intent intent = new Intent(getApplicationContext(), MainActivity.class);
         PendingIntent pi = PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT);
         Notification notification = new Notification.Builder(this, CHANNEL_ID)
-                .setSmallIcon(R.drawable.bt_notification_icon)
                 .setContentTitle("Scanning Service")
                 .setContentText(msg)
+                .setSmallIcon(R.drawable.bt_notification_icon)
                 .setAutoCancel(true)
                 .setContentIntent(pi)
                 .build();

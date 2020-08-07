@@ -1,6 +1,5 @@
 package com.bttoy.btping;
 
-import android.Manifest;
 import android.annotation.TargetApi;
 import android.bluetooth.BluetoothManager;
 import android.content.BroadcastReceiver;
@@ -20,14 +19,12 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.localbroadcastmanager.content.LocalBroadcastManager;
 
 import org.altbeacon.beacon.Beacon;
-import org.altbeacon.beacon.BeaconTransmitter;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Objects;
 
 /*
-    TODO: works, but on my phone is okay. Don't get it.
     TODO: fix the goddamn notification system for the service
  */
 
@@ -36,12 +33,15 @@ public class MainActivity extends AppCompatActivity {
     protected static final String btpingUUID = "7e6985df-4aa3-4bda-bb8b-9f11bf7077a0";
     protected static final String SCANNING_ACTION = "SCANNING_SERVICE_UPDATE";
     protected static final String BEACON_ACTION = "BEACON_SERVICE_UPDATE";
+    private static final int PERMISSION_REQUEST_FINE_LOCATION = 1;
+    private static final int PERMISSION_REQUEST_BACKGROUND_LOCATION = 2;
+    private static String[] perms = {"android.permission.ACCESS_FINE_LOCATION", "android.permission.ACCESS_BACKGROUND_LOCATION"};
     protected String minorID = "1";
     private BroadcastReceiver receiver = null;
-    private BeaconTransmitter mBeaconTransmitter = null;
     private ArrayList<Beacon> sauce = new ArrayList<>();
-    private Beacon beacon = null;
+    private ListCustomAdapter listCustomAdapter;
     private TextView idTextView;
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -49,7 +49,7 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
         boolean compliant = checkPrerequisites();
         //Richiediamo il permesso per la Localizzazione
-        requestPermissions(new String[]{Manifest.permission.ACCESS_COARSE_LOCATION}, 1234);
+        requestPermissions(perms, 1234);
 
         Switch beaconSw = findViewById(R.id.beaconSwitch);
         Switch scanSw = findViewById(R.id.scanSwitch);
@@ -57,7 +57,7 @@ public class MainActivity extends AppCompatActivity {
         Button idConfirm = findViewById(R.id.confIDButton);
         ListView listView = findViewById(R.id.beaconList);
         sauce.clear();
-        ListCustomAdapter listCustomAdapter = new ListCustomAdapter(this, sauce);
+        listCustomAdapter = new ListCustomAdapter(this, sauce);
         listView.setAdapter(listCustomAdapter);
 
         receiver = new BroadcastReceiver() {
@@ -69,10 +69,18 @@ public class MainActivity extends AppCompatActivity {
                 switch (action) {
                     case SCANNING_ACTION: {
                         String[] message = Objects.requireNonNull(intent.getStringExtra("SCANNING_UPDATE")).split(":");
-                        Toast.makeText(getApplicationContext(), Arrays.toString(message), Toast.LENGTH_SHORT).show();
-                        if (message[0].equals("Found")) {
-                            updateList((Beacon) intent.getSerializableExtra("BEACON_FOUND"));
-                        }
+                        runOnUiThread(() -> {
+                            if (message[0].equals("Found")) {
+                                Beacon newItem = (Beacon) intent.getSerializableExtra("BEACON_FOUND");
+                                if (!sauce.contains(newItem)) {
+                                    Toast.makeText(getApplicationContext(), Arrays.toString(message), Toast.LENGTH_SHORT).show();
+                                    sauce.add(newItem);
+                                    listCustomAdapter.notifyDataSetChanged();
+                                }
+                            } else {
+                                Toast.makeText(getApplicationContext(), Arrays.toString(message), Toast.LENGTH_SHORT).show();
+                            }
+                        });
                         break;
                     }
                     case BEACON_ACTION: {
@@ -128,31 +136,6 @@ public class MainActivity extends AppCompatActivity {
         stopService(beaconIntent);
         LocalBroadcastManager.getInstance(this).unregisterReceiver(receiver);
         super.onDestroy();
-    }
-
-    public void updateList(Beacon newItem) {
-        runOnUiThread(() -> {
-            /*
-            if (message[0].equals("In") || message[0].equals("Out")) {
-
-                switch (message[0]) {
-                    case "In": {
-                        if (!sauce.contains(newItem)) {
-                            sauce.add(newItem);
-                            listCustomAdapter.notifyDataSetChanged();
-                        }
-                        break;
-                    }
-                    case "Out": {
-                        sauce.remove(newItem);
-                        listCustomAdapter.notifyDataSetChanged();
-                        break;
-                    }
-                }
-            }
-             */
-            if (!sauce.contains(newItem)) sauce.add(newItem);
-        });
     }
 
     @TargetApi(21)
@@ -228,6 +211,4 @@ public class MainActivity extends AppCompatActivity {
         }
         return true;
     }
-
-
 }
