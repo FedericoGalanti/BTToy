@@ -26,7 +26,7 @@ public class BeaconService extends Service {
     @Override
     public IBinder onBind(Intent intent) {
         return null;
-        // Non necessito di effettuare il binding. Vedi "OnStart"
+        // Not needed: see "onStarCommand"
     }
 
     @Override
@@ -38,10 +38,11 @@ public class BeaconService extends Service {
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         /*
-            Considerando che deve effettuare un'operazione long-running e che controllo il service
-            dall'attività con i pulsanti, mi basta farlo avviare. I controlli sul Bluetooth, verranno
-            fatti dall'attività, quindi, se il BT dovesse mancare o il dispositivo non fosse abilitato,
-            posso controllare il Service per farlo stoppare o per prevenirne la creazione.
+            Since I don't need an on-demand service (i.e. C/S behavior), I want this service to run
+            freely without binding, so can run in the background even when activity gets killed.
+
+            On Start, getting the "minor" from the intent, setting up the beacon (AltBeacon),
+            try to start advertisement and sets messages for the MainActivity.
          */
         super.onStartCommand(intent, flags, startId);
         String minor = intent.getStringExtra("beacon_minor");
@@ -58,6 +59,10 @@ public class BeaconService extends Service {
         mBeaconTransmitter.startAdvertising(beacon, new AdvertiseCallback() {
             @Override
             public void onStartFailure(int errorCode) {
+                /*
+                    Gives the error code and self stop, since there is no need to have a service
+                    running if it does nothing.
+                 */
                 tellMain("Debug: advertising non avviato! " + errorCode);
                 stopSelf();
             }
@@ -72,17 +77,27 @@ public class BeaconService extends Service {
 
     @Override
     public void onDestroy() {
+        /*
+            Stops advertising and notice main that is going off. This is signal for unlocking
+            the switch to try restart the beacon service.
+            Note: if service gets killed and restarted, beaconing won't work and will throw an error,
+            indicating that a beacon is already in place (errorcode 2), because can detect that the
+            previous setup wasn't wiped out.
+            Since onDestroy shoud take a couple of seconds and checking up on services is deprecated,
+            this was the smartest way I had to prevent this situation.
+         */
         mBeaconTransmitter.stopAdvertising();
         mBeaconTransmitter = null;
+        tellMain("Info: service going off!");
         super.onDestroy();
     }
 
     private void tellMain(String msg) {
+        /*
+            Accessory method that fires communications via Broadcast.
+         */
         Intent intent = new Intent("BEACON_SERVICE_UPDATE");
-        // You can also include some extra data.
         intent.putExtra("BEACON_UPDATE", msg);
         LocalBroadcastManager.getInstance(getApplicationContext()).sendBroadcast(intent);
     }
-
-
 }

@@ -18,7 +18,7 @@ public class ListCustomAdapter extends BaseAdapter {
     private Context ctx;
     private ArrayList<Beacon> sauce;
 
-    public ListCustomAdapter(Context ctx, ArrayList<Beacon> sauce) {
+    ListCustomAdapter(Context ctx, ArrayList<Beacon> sauce) {
         this.ctx = ctx;
         this.sauce = sauce;
     }
@@ -55,11 +55,11 @@ public class ListCustomAdapter extends BaseAdapter {
 
         holder.uid.setText(item.getId1().toString());
         holder.major.setText(item.getId2().toString());
-        holder.minor.setText(item.getId3().toString());
+        String topper = item.getId3().toString() + item.getDistance();
+        holder.minor.setText(topper);
 
         return convertView;
     }
-
 
     static class ItemListHolder {
         TextView uid;

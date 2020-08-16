@@ -4,7 +4,6 @@ import android.annotation.TargetApi;
 import android.bluetooth.BluetoothManager;
 import android.content.BroadcastReceiver;
 import android.content.Context;
-import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.PackageManager;
@@ -30,15 +29,13 @@ import java.util.Objects;
 
 public class MainActivity extends AppCompatActivity {
     protected static final String TAG = "MainActivity";
-    protected static final String btpingUUID = "7e6985df-4aa3-4bda-bb8b-9f11bf7077a0";
     protected static final String SCANNING_ACTION = "SCANNING_SERVICE_UPDATE";
     protected static final String BEACON_ACTION = "BEACON_SERVICE_UPDATE";
-    private static final int PERMISSION_REQUEST_FINE_LOCATION = 1;
-    private static final int PERMISSION_REQUEST_BACKGROUND_LOCATION = 2;
     private static String[] perms = {"android.permission.ACCESS_FINE_LOCATION", "android.permission.ACCESS_BACKGROUND_LOCATION"};
     protected String minorID = "1";
     private BroadcastReceiver receiver = null;
     private ArrayList<Beacon> sauce = new ArrayList<>();
+    private ArrayList<Beacon> missing = new ArrayList<>();
     private ListCustomAdapter listCustomAdapter;
     private TextView idTextView;
 
@@ -48,7 +45,10 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
         boolean compliant = checkPrerequisites();
-        //Richiediamo il permesso per la Localizzazione
+        /*
+            Requesting permissions: had to hardcode it, since apk 27+ (Android 10+)
+            wouldn't force requests on app opening.
+         */
         requestPermissions(perms, 1234);
 
         Switch beaconSw = findViewById(R.id.beaconSwitch);
@@ -56,35 +56,60 @@ public class MainActivity extends AppCompatActivity {
         idTextView = findViewById(R.id.beaconIDTextView);
         Button idConfirm = findViewById(R.id.confIDButton);
         ListView listView = findViewById(R.id.beaconList);
+        /*
+            Clearing sauce and connecting the adapter
+         */
         sauce.clear();
         listCustomAdapter = new ListCustomAdapter(this, sauce);
         listView.setAdapter(listCustomAdapter);
 
+        /*
+            Setting up the receiver. This takes broadcasts from both Beacon and Scanning Service:
+            - Scanning service:
+                - "Info": should implement logic for disabling button while Service is going off
+                - "Beacon": by information given from the "Monitor" function, controls view content,
+                    namely, the sauce of the ListView.
+                - Note: "Beacon" case may be at his load limit for a normal receiver. Ulterior
+                    manipulations should be done in a thread. In this case, adjust by making a
+                    companion thread that serves the list or create Runnable to post to the listview
+
+            - Beacon service: takes only notifications of beacon service status. Nothing more.
+            Implementation is made via "LocalBroadcast", which may be deprecated, thus should be
+            implemented with stable implementations (Broadcast with custom permissions...?)
+         */
+
         receiver = new BroadcastReceiver() {
             @Override
             public void onReceive(Context context, Intent intent) {
-                // Receiver per catturare i dispositivi visti
+                // Main receiver for local broadcasts
                 String action = intent.getAction();
                 assert action != null;
                 switch (action) {
                     case SCANNING_ACTION: {
                         String[] message = Objects.requireNonNull(intent.getStringExtra("SCANNING_UPDATE")).split(":");
-                        runOnUiThread(() -> {
-                            if (message[0].equals("Found")) {
-                                Beacon newItem = (Beacon) intent.getSerializableExtra("BEACON_FOUND");
-                                if (!sauce.contains(newItem)) {
-                                    Toast.makeText(getApplicationContext(), Arrays.toString(message), Toast.LENGTH_SHORT).show();
-                                    sauce.add(newItem);
+                        switch (message[0]) {
+                            case "Info": {
+                                if (message[1].contains("off")) scanSw.setEnabled(true);
+                                break;
+                            }
+                            case "Beacon": {
+                                Beacon b = intent.getParcelableExtra("BEACON");
+                                if (message[1].contains("Inside") && !sauce.contains(b))
+                                    sauce.add(b);
+                                else sauce.remove(b);
                                     listCustomAdapter.notifyDataSetChanged();
                                 }
-                            } else {
+                            default: {
                                 Toast.makeText(getApplicationContext(), Arrays.toString(message), Toast.LENGTH_SHORT).show();
+                                break;
                             }
-                        });
+                        }
                         break;
                     }
                     case BEACON_ACTION: {
-                        Toast.makeText(getApplicationContext(), intent.getStringExtra("BEACON_UPDATE"), Toast.LENGTH_SHORT).show();
+                        String[] message = Objects.requireNonNull(intent.getStringExtra("BEACON_UPDATE")).split(":");
+                        if (message[1].contains("off")) beaconSw.setEnabled(true);
+                        Toast.makeText(getApplicationContext(), Arrays.toString(message), Toast.LENGTH_SHORT).show();
                         break;
                     }
                     default: {
@@ -97,6 +122,13 @@ public class MainActivity extends AppCompatActivity {
         filter.addAction(BEACON_ACTION);
         LocalBroadcastManager.getInstance(this).registerReceiver(receiver, filter);
 
+        /*
+            Setting up switches. Compliant = control over APIs and stuff (checkRequisites).
+            The beacon switch will pass via Intent the "Minor" (aka the distinguished personal id)
+            to the beacon Service for building.
+
+         */
+
         if (compliant) {
             beaconSw.setOnCheckedChangeListener((buttonView, isChecked) -> {
                 Intent beaconIntent = new Intent(getApplicationContext(), BeaconService.class);
@@ -106,6 +138,7 @@ public class MainActivity extends AppCompatActivity {
                     Toast.makeText(this, R.string.status_beacon_on, Toast.LENGTH_SHORT).show();
                 } else {
                     stopService(beaconIntent);
+                    beaconSw.setEnabled(false);
                     Toast.makeText(this, R.string.status_beacon_off, Toast.LENGTH_SHORT).show();
                 }
             });
@@ -118,18 +151,26 @@ public class MainActivity extends AppCompatActivity {
                 Toast.makeText(this, R.string.status_scanning_on, Toast.LENGTH_SHORT).show();
             } else {
                 stopService(scanningIntent);
+                scanSw.setEnabled(false);
                 Toast.makeText(this, R.string.status_scanning_off, Toast.LENGTH_SHORT).show();
             }
         });
 
+        /*
+            ID button connected to the number text view. This is for debug mostly, since there is
+            no persistence. Sets up the "minor" indicated in the number text view.
+         */
         idConfirm.setOnClickListener(v -> {
             if (idTextView.getText() != null) minorID = idTextView.getText().toString();
         });
     }
 
+
     @Override
     protected void onDestroy(){
-        // Stoppo il Service, de-registro il receiver e chiudo tutto
+        /*
+            Cleanup for the services and the receiver
+         */
         Intent scanningIntent = new Intent(getApplicationContext(), ScanningService.class);
         stopService(scanningIntent);
         Intent beaconIntent = new Intent(getApplicationContext(), BeaconService.class);
@@ -138,6 +179,7 @@ public class MainActivity extends AppCompatActivity {
         super.onDestroy();
     }
 
+
     @TargetApi(21)
     private boolean checkPrerequisites() {
         if (android.os.Build.VERSION.SDK_INT < 18) {
@@ -145,12 +187,7 @@ public class MainActivity extends AppCompatActivity {
             builder.setTitle("Bluetooth LE not supported by this device's operating system");
             builder.setMessage("You will not be able to transmit as a Beacon");
             builder.setPositiveButton(android.R.string.ok, null);
-            builder.setOnDismissListener(new DialogInterface.OnDismissListener() {
-
-                @Override
-                public void onDismiss(DialogInterface dialog) {
-
-                }
+            builder.setOnDismissListener(dialog -> {
 
             });
             builder.show();
@@ -161,12 +198,7 @@ public class MainActivity extends AppCompatActivity {
             builder.setTitle("Bluetooth LE not supported by this device");
             builder.setMessage("You will not be able to transmit as a Beacon");
             builder.setPositiveButton(android.R.string.ok, null);
-            builder.setOnDismissListener(new DialogInterface.OnDismissListener() {
-
-                @Override
-                public void onDismiss(DialogInterface dialog) {
-
-                }
+            builder.setOnDismissListener(dialog -> {
 
             });
             builder.show();
@@ -177,12 +209,7 @@ public class MainActivity extends AppCompatActivity {
             builder.setTitle("Bluetooth not enabled");
             builder.setMessage("Please enable Bluetooth and restart this app.");
             builder.setPositiveButton(android.R.string.ok, null);
-            builder.setOnDismissListener(new DialogInterface.OnDismissListener() {
-
-                @Override
-                public void onDismiss(DialogInterface dialog) {
-
-                }
+            builder.setOnDismissListener(dialog -> {
 
             });
             builder.show();
@@ -198,17 +225,12 @@ public class MainActivity extends AppCompatActivity {
             builder.setTitle("Bluetooth LE advertising unavailable");
             builder.setMessage("Sorry, the operating system on this device does not support Bluetooth LE advertising.  As of July 2014, only the Android L preview OS supports this feature in user-installed apps.");
             builder.setPositiveButton(android.R.string.ok, null);
-            builder.setOnDismissListener(new DialogInterface.OnDismissListener() {
-                @Override
-                public void onDismiss(DialogInterface dialog) {
-                    finish();
-                }
-
-            });
+            builder.setOnDismissListener(dialog -> finish());
             builder.show();
             return false;
 
         }
         return true;
     }
+
 }

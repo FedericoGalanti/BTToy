@@ -2,6 +2,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.bttoy.btping">
     <!-- Bluetooth necessita dei permessi BT, BT_ADMIN e COARSE_LOCATION per funzionare con i beacons-->
+    <!-- Servono FINE_LOCATION E BACKGROUND_LOCATION da Android 10+-->
     <uses-permission android:name="android.permission.BLUETOOTH"/>
     <uses-permission android:name="android.permission.BLUETOOTH_ADMIN"/>
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
