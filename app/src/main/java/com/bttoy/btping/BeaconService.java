@@ -32,6 +32,8 @@ public class BeaconService extends Service {
     @Override
     public void onCreate() {
         mBeaconTransmitter = new BeaconTransmitter(getApplicationContext(), new BeaconParser().setBeaconLayout(BeaconParser.ALTBEACON_LAYOUT));
+        mBeaconTransmitter.setAdvertiseMode(AdvertiseSettings.ADVERTISE_MODE_BALANCED);
+        mBeaconTransmitter.setConnectable(false);
         super.onCreate();
     }
 
@@ -44,7 +46,6 @@ public class BeaconService extends Service {
             On Start, getting the "minor" from the intent, setting up the beacon (AltBeacon),
             try to start advertisement and sets messages for the MainActivity.
          */
-        super.onStartCommand(intent, flags, startId);
         String minor = intent.getStringExtra("beacon_minor");
         assert minor != null;
         beacon = new Beacon.Builder()

@@ -93,10 +93,11 @@ public class MainActivity extends AppCompatActivity {
                                 break;
                             }
                             case "Beacon": {
-                                Beacon b = intent.getParcelableExtra("BEACON");
-                                if (message[1].contains("Inside") && !sauce.contains(b))
-                                    sauce.add(b);
-                                else sauce.remove(b);
+                                ArrayList<Beacon> b = Objects.requireNonNull(intent.getParcelableArrayListExtra("BEACON"));
+                                if (message[1].contains("Inside")) {
+                                    sauce.clear();
+                                    sauce.addAll(b);
+                                } else sauce.removeAll(b);
                                     listCustomAdapter.notifyDataSetChanged();
                                 }
                             default: {
@@ -151,6 +152,8 @@ public class MainActivity extends AppCompatActivity {
                 Toast.makeText(this, R.string.status_scanning_on, Toast.LENGTH_SHORT).show();
             } else {
                 stopService(scanningIntent);
+                sauce.clear();
+                listCustomAdapter.notifyDataSetChanged();
                 scanSw.setEnabled(false);
                 Toast.makeText(this, R.string.status_scanning_off, Toast.LENGTH_SHORT).show();
             }

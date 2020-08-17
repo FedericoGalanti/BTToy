@@ -1,15 +1,18 @@
 package com.bttoy.btping;
 
 import android.app.Notification;
+import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
+import android.os.Build;
 import android.os.IBinder;
 import android.os.RemoteException;
 
 import androidx.annotation.Nullable;
+import androidx.core.app.NotificationCompat;
 import androidx.localbroadcastmanager.content.LocalBroadcastManager;
 
 import org.altbeacon.beacon.Beacon;
@@ -20,17 +23,15 @@ import org.altbeacon.beacon.Identifier;
 import org.altbeacon.beacon.MonitorNotifier;
 import org.altbeacon.beacon.Region;
 
-import java.io.Serializable;
 import java.util.ArrayList;
-import java.util.HashMap;
 
 
 public class ScanningService extends Service implements BeaconConsumer {
     protected static final String TAG = "ScanningService";
     protected static final Identifier btpingUUID = Identifier.parse("7e6985df-4aa3-4bda-bb8b-9f11bf7077a0");
     private static final String CHANNEL_ID = "001";
-    private static final String[] status = {"Outside", "Inside"};
     private NotificationManager mNotification = null;
+    private NotificationChannel mChannel = null;
     /*
         BeaconManager's here because I want an instance of it to be at disposal, since I will
         call frequently "startMonitoring" for each new Beacon. I declare it here and set up in
@@ -48,7 +49,7 @@ public class ScanningService extends Service implements BeaconConsumer {
         used to quickly retrieve beacons by using their region.
      */
     private Region beaconRegion = null;
-    private HashMap<Region, Beacon> inSight = new HashMap<>();
+    private ArrayList<Beacon> listBeacons = new ArrayList<>();
 
     @Nullable
     @Override
@@ -59,8 +60,13 @@ public class ScanningService extends Service implements BeaconConsumer {
     @Override
     public void onCreate() {
         super.onCreate();
-        mNotification = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
-        //Istanzio il Beacon Manager
+        if (mNotification != null)
+            mNotification = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+        if (mChannel != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            mChannel = new NotificationChannel(CHANNEL_ID, "ScanNotify", NotificationManager.IMPORTANCE_DEFAULT);
+            mNotification.createNotificationChannel(mChannel);
+        }
+        //Beacon Manager setup
         beaconManager = BeaconManager.getInstanceForApplication(getApplicationContext());
         /*
             Il Beacon Manager, per riconoscere i Beacons (AltBeacon, quindi tutti i beacon),
@@ -88,10 +94,16 @@ public class ScanningService extends Service implements BeaconConsumer {
             Per ora lavoriamo solo con AltBeacon.
          */
         beaconManager.getBeaconParsers().add(new BeaconParser().setBeaconLayout(BeaconParser.ALTBEACON_LAYOUT));
-        beaconManager.setEnableScheduledScanJobs(false);
-        beaconManager.setBackgroundBetweenScanPeriod(2000);
-        beaconManager.setBackgroundScanPeriod(2000);
         //Creating region for ranging
+        beaconManager.setBackgroundScanPeriod(5000);
+        beaconManager.setBackgroundBetweenScanPeriod(5 * 60 * 1000);
+        beaconManager.setForegroundScanPeriod(2000);
+        beaconManager.setForegroundBetweenScanPeriod(10000);
+        try {
+            beaconManager.updateScanPeriods();
+        } catch (RemoteException e) {
+            e.printStackTrace();
+        }
         beaconRegion = new Region("BTPing Region", btpingUUID,
                 Identifier.parse("1"), null);
     }
@@ -149,12 +161,18 @@ public class ScanningService extends Service implements BeaconConsumer {
                     Instead of using didEnter/Exit, this callback gives the "state" of the "beacon"
                     (represented by the region). State = 1 (INSIDE), State = 0 (OUTSIDE).
                     Then tells the main if the beacon entered or exited the region, allowing main to
-                    update the listview (check receiver, "Beacon" case).
+                    update the listview (check receiver, "Beacon" case) (NOPE NOPE NOPE)
                     Ulterior logic can be done, but pay attention to not overload it. Juggling with
                     the other two callbacks for better handling of more complex cases, is interesting.
+                    try{
+
+                    beaconManager.stopRangingBeaconsInRegion(region);
+                    beaconManager.startRangingBeaconsInRegion(region);
+                } catch (RemoteException e) {
+                    e.printStackTrace();
+                }
                  */
-                Beacon b = inSight.get(region);
-                tellMain("Beacon: " + status[state], b);
+
             }
         });
 
@@ -165,7 +183,7 @@ public class ScanningService extends Service implements BeaconConsumer {
                 I tried to check if it would get a strange value for range, if beacon was to get out
                 of range, but it's pointless to work in here, when you can work with MonitorNotifiers.
                 Just feeds monitoringSetup() every now and then to allow checking for new beacons
-                coming to town.
+                coming to town. (AGAIN NOPE NOPE NOPE, you understood badly)
 
                 Thread x monitoringSetup(): this is done because the notifiers have little to no time
                 for heavier execution. With this, I delegate a thread to take care of it in parallel.
@@ -179,12 +197,13 @@ public class ScanningService extends Service implements BeaconConsumer {
              */
             if (collection.size() > 0) {
                 ArrayList<Beacon> newSeen = new ArrayList<>(collection);
-                new Thread(() -> monitoringSetup(newSeen)).start();
+                new Thread(() -> listBeaconUpdate(newSeen)).start();
             }
         });
 
         try {
             beaconManager.startRangingBeaconsInRegion(beaconRegion);
+            beaconManager.startMonitoringBeaconsInRegion(beaconRegion);
             tellMain("Debug: range started!", null);
         } catch (RemoteException e) {
             tellMain("Debug: Remote exception: " + e.toString(), null);
@@ -200,47 +219,59 @@ public class ScanningService extends Service implements BeaconConsumer {
             have no consequences if were already stopped.
          */
         try {
-            for (Region r : inSight.keySet()) beaconManager.stopMonitoringBeaconsInRegion(r);
+            beaconManager.stopMonitoringBeaconsInRegion(beaconRegion);
             beaconManager.stopRangingBeaconsInRegion(beaconRegion);
         } catch (RemoteException e) {
             e.printStackTrace();
         }
     }
 
-    private void monitoringSetup(ArrayList<Beacon> list) {
-        for (Beacon b : list) {
-            Region r = new Region("BTPing Region", btpingUUID, b.getId2(), b.getId3());
-            if (!inSight.containsKey(r)) {
-                inSight.put(r, b);
-                try {
-                    beaconManager.startMonitoringBeaconsInRegion(r);
-                } catch (RemoteException e) {
-                    e.printStackTrace();
-                }
+    private void listBeaconUpdate(ArrayList<Beacon> list) {
+            /*
+                Mi ricavo i beacon persi di vista, in modo da toglierli.
+                Per il resto, è solo questione di sostituire la lista originale.
+             */
+        ArrayList<Beacon> lostBeacons = listBeacons;
+        lostBeacons.removeAll(list);
+        tellMain("Beacon: Inside", list);
+            /*
+            if (!lostBeacons.isEmpty()){
+                //tellMain("Beacon: Outside", lostBeacons);
+                StringBuilder notificationMessage = new StringBuilder();
+                for (Beacon b : lostBeacons) notificationMessage.append(" ").append(b.getId3()).append(" ");
+                showNotification("Scanning update!", "Beacons got out of range: " + notificationMessage.toString().trim());
             }
-        }
+             */
+        listBeacons.clear();
+        listBeacons.addAll(list);
     }
 
-    private void tellMain(String msg, Beacon b) {
+
+    private void tellMain(String msg, ArrayList<Beacon> b) {
         Intent intent = new Intent("SCANNING_SERVICE_UPDATE");
-        // You can also include some extra data.
         intent.putExtra("SCANNING_UPDATE", msg);
-        if (b != null) intent.putExtra("BEACON", (Serializable) b);
+        if (b != null) intent.putParcelableArrayListExtra("BEACON", b);
         LocalBroadcastManager.getInstance(getApplicationContext()).sendBroadcast(intent);
-        //showNotification(msg);
     }
 
-    private void showNotification(final String msg) {
+    private void showNotification(final String title, final String msg) {
+        if (mNotification != null)
+            mNotification = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+        if (mChannel != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            mChannel = new NotificationChannel(CHANNEL_ID, "ScanNotify", NotificationManager.IMPORTANCE_DEFAULT);
+            mNotification.createNotificationChannel(mChannel);
+        }
         Intent intent = new Intent(getApplicationContext(), MainActivity.class);
         PendingIntent pi = PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT);
-        Notification notification = new Notification.Builder(this, CHANNEL_ID)
-                .setContentTitle("Scanning Service")
-                .setContentText(msg)
+        Notification notification = new NotificationCompat.Builder(this, CHANNEL_ID)
                 .setSmallIcon(R.drawable.bt_notification_icon)
+                .setContentTitle(title)
+                .setContentText(msg)
                 .setAutoCancel(true)
                 .setContentIntent(pi)
                 .build();
-        if (mNotification != null) mNotification.notify(0, notification);
+        mNotification.notify(1, notification);
     }
+
 }
 

@@ -55,7 +55,7 @@ public class ListCustomAdapter extends BaseAdapter {
 
         holder.uid.setText(item.getId1().toString());
         holder.major.setText(item.getId2().toString());
-        String topper = item.getId3().toString() + item.getDistance();
+        String topper = item.getId3().toString();
         holder.minor.setText(topper);
 
         return convertView;
