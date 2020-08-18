@@ -44,6 +44,4 @@ If a device will get out of range, a Notification will be sended to the user abo
 list.
 
 ## Disclaimer
-This is by any means NOT a full stable app. It is a toy case for which behavior is as intended by my starting specifics. Any modifications of the following code are beyond my
-responsibility, both in functionality or possible misusages. The project itself can be considered as a starting point for major projects involving BLE, Android Beacon Library
-and other similar technologies.
+This is by any means NOT a full stable app. It is a toy case for which behavior is as intended by my starting specifics. Any external modifications of the following code are beyond my responsibility, both in functionality or possible misusages. The project itself can be considered as a starting point for major projects involving BLE, Android Beacon Library and other similar technologies.
