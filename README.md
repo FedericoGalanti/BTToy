@@ -1,4 +1,4 @@
-# BTToy
+# BTToy - BTPing
 BLE Toy case, made to test with Beaconing both in Scanning and in Advertising mode, using the "Android Beacon Library" and AltBeacon standard.
 BTToy is a simple applications that allow a device with a Bluetooth 5.0 chip to be both a Beacon and a Scanner. During scanning, if any beacon happens to be nearby the scanner,
 this are shown in a simple list under all of the controls. If beacons get out of range, the app will notify the event to the user, reporting which beacons went missing during last
