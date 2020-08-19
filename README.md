@@ -45,3 +45,5 @@ list.
 
 ## Disclaimer
 This is by any means NOT a full stable app. It is a toy case for which behavior is as intended by my starting specifics. Any external modifications of the following code are beyond my responsibility, both in functionality or possible misusages. The project itself can be considered as a starting point for major projects involving BLE, Android Beacon Library and other similar technologies.
+
+Major issue: on older mobiles (Andoid Version 9-), BLE interface allows for only one beacon to be active at any given time. This means that, if Apple/Google Exposure Notification Service is active, beaconing will not be working. Trying activating a beacon in this situation will return Toast message "Debug: advertising not started 2". The number 2 refers to the error code from the "startAdvertising" callback. To fix the issue, deactivate temporarily the A/G Exposure Notification Service and run the app. After app usage, REACTIVATE A/G EXPOSURE NOTIFICATION SERVICE. Stay healty!
