@@ -44,7 +44,7 @@ public class BeaconService extends Service {
             freely without binding, so can run in the background even when activity gets killed.
 
             On Start, getting the "minor" from the intent, setting up the beacon (AltBeacon),
-            try to start advertisement and sets messages for the MainActivity.
+            try to start advertisement and sets messages for the MainActivityTest.
          */
         String minor = intent.getStringExtra("beacon_minor");
         assert minor != null;

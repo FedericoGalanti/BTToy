@@ -32,7 +32,7 @@ import org.altbeacon.beacon.Region;
  */
 
 public class OldMainActivity extends AppCompatActivity implements BeaconConsumer {
-    protected static final String TAG = "MainActivity";
+    protected static final String TAG = "MainActivityTest";
     protected static final String btpingUUID = "7e6985df-4aa3-4bda-bb8b-9f11bf7077a0";
     /*
         Beacon Manager serve per creare o gestire i Beacons che si vogliono creare.

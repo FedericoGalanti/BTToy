@@ -13,4 +13,5 @@
     <string name="item_title">UID</string>
     <string name="item_description_1">Major</string>
     <string name="item_description_2">Minor</string>
+    <string name="produci_log">Produci Log</string>
 </resources>
